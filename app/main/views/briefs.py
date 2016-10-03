@@ -21,7 +21,7 @@ from ... import data_api_client
 
 # Skunk
 
-from jinja2 import Environment, StrictUndefined, escape
+from jinja2 import Environment, StrictUndefined, escape, Markup
 from jinja2.sandbox import SandboxedEnvironment
 import markdown
 
@@ -128,7 +128,28 @@ def brief_response(brief_id):
     section = content.get_section(content.get_next_editable_section_id())
 
     # replace generic 'Apply for opportunity' title with title including the name of the brief
-    section.name = "Apply for ‘{}’".format(brief['title'])
+    # name, description, hint for sections and questions
+
+    def do_something(section_or_question, lot, brief):
+
+        env = SandboxedEnvironment(autoescape=True, undefined=StrictUndefined)
+
+        # do the thing to this one, call recursively on
+        # also `description` but there's this whole thing where they're _descriptions
+        for attribute in ['name', '_description', 'hint']:
+            try:
+                value = getattr(section_or_question, attribute)
+                if value:
+                    setattr(section, attribute, Markup(
+                        env.from_string(
+                            markdown.markdown(escape(value))
+                        ).render(lot=lot, brief=brief))
+                    )
+
+            except AttributeError:
+                pass
+
+    do_something(section, lot, brief)
     section.inject_brief_questions_into_boolean_list_question(brief)
 
     return render_template(
