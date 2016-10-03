@@ -19,6 +19,40 @@ from ..helpers.frameworks import get_framework_and_lot
 from ...main import main, content_loader
 from ... import data_api_client
 
+# Skunk
+
+from jinja2 import Environment, StrictUndefined, escape
+from jinja2.sandbox import SandboxedEnvironment
+import markdown
+
+from six import string_types
+
+
+@main.route('/skunk')
+def skunk():
+
+    # neither the markdown nor the html will be formatted as html -- everything will be printed literally to the screen
+    brief = {
+        'role': '<em>**developer**</em> <script>alert("Paul");</script>'
+    }
+
+    senv = Environment(
+        autoescape=True,
+        undefined=StrictUndefined
+    )
+
+    # only the markdown will be interpreted
+    html = senv.from_string(
+            markdown.markdown(escape('< I am <strong>a</strong> _really good_ ‘{{ brief.role }}’'))
+        ).render(
+            brief=brief
+        )
+
+    # becomes <p>&lt; I am &lt;strong&gt;a&lt;/strong&gt; <em>really good</em> ‘&lt;em&gt;**developer**&lt;/em&gt; &lt;script&gt;alert(&#34;Paul&#34;);&lt;/script&gt;’</p>  # noqa
+    return html
+
+
+# /Skunk
 
 @main.route('/opportunities/<int:brief_id>/question-and-answer-session', methods=['GET'])
 @login_required
