@@ -106,6 +106,172 @@ def brief_response(brief_id):
     ), 200
 
 
+@main.route('/opportunities/<int:brief_id>/responses/multiquestion', methods=['GET', 'POST'])
+@login_required
+def brief_response_multiquestion(brief_id):
+
+    brief = get_brief(data_api_client, brief_id, allowed_statuses=['live'])
+
+    if not is_supplier_eligible_for_brief(data_api_client, current_user.supplier_id, brief):
+        return _render_not_eligible_for_brief_error_page(brief)
+
+    if supplier_has_a_brief_response(data_api_client, current_user.supplier_id, brief_id):
+        flash('already_applied', 'error')
+        return redirect(url_for(".view_response_result", brief_id=brief_id))
+
+    framework, lot = get_framework_and_lot(
+        data_api_client, brief['frameworkSlug'], brief['lotSlug'], allowed_statuses=['live'])
+
+    content = content_loader.get_manifest(
+        framework['slug'], 'edit_brief_response_multiquestion'
+    ).filter({'lot': lot['slug']})
+    section = content.get_section(content.get_next_editable_section_id())
+
+    from jinja2.sandbox import SandboxedEnvironment
+    from jinja2 import StrictUndefined
+    from dmcontent.questions import ContentQuestion
+
+    e = SandboxedEnvironment(autoescape=True, undefined=StrictUndefined)
+    question_question = 'Can we build it?'
+    fake_brief = {
+        'essentialRequirements': [
+            'Have you done PHP for 1 year?',
+            'Have you done PHP for 2 years?',
+            'Have you done PHP for 3 years?',
+            'Have you done PHP for 4 years?'
+        ]
+    }
+    for q in section.questions:
+        # if we have a 'dynamic' multiquestion
+        if q.type == 'multiquestion' and q.get('dynamic_field'):  # this is quite bad
+            new_list_of_questions = []
+            # really hacky way to dynamically figure out how to pass stuff into the section
+            where_to_find_our_list_values = q.get('dynamic_field').split('.')
+            for index, req in enumerate(locals()[where_to_find_our_list_values[0]][where_to_find_our_list_values[1]]):
+
+                for nested_q in q.questions:
+                    new_question_data = nested_q._data.copy()
+                    new_question_data.update({'id': "{}-{}".format(nested_q.id, index)})
+                    if 'followup' in new_question_data:
+                        new_question_data.update({'followup': "{}-{}".format(nested_q.followup, index)})
+                    # create a new ContentQuestion with a new `id` and `followup` if one exists
+                    new_question = ContentQuestion(new_question_data)
+                    # hardcoded question attributes to be (potentially) overridden
+                    for attr in ['question', 'hint']:
+                        try:
+                            setattr(
+                                new_question,
+                                attr,
+                                e.from_string(getattr(new_question, attr)).render(
+                                    lot=lot['slug'], essentialRequirement=req
+                                )
+                            )
+                        except AttributeError:
+                            pass
+
+                    # add new question to a list
+                    new_list_of_questions.append(new_question)
+
+            # modify the existing dynamic multiquestion, passing it a list of generated questions
+            q.questions = new_list_of_questions
+
+    # replace generic 'Apply for opportunity' title with title including the name of the brief
+    section.name = "Apply for ‘{}’".format(brief['title'])
+    response_data, errors = {}, {}
+
+    if request.method == 'POST':
+        response_data = section.get_data(request.form)
+
+        def process_response_data(section, response_data, brief):
+            """
+            method to return the dynamic multiquestion data differently
+            # IN >>>
+            {
+              "respondToEmailAddress": "paul@paul.paul",
+              "yesno-0": true,
+              "yesno-1": true,
+              "evidence-0": "Yes, I did.",
+              "evidence-1": null
+            }
+
+            # <<< OUT
+            {
+              "respondToEmailAddress": "paul@paul.paul",
+              "niceToHaveRequirementsMultiquestion":
+                [{
+                  "yesno-0": true,
+                  "evidence-0": "Yes, I did."
+                },
+                {
+                  "yesno-1": true,
+                  "evidence-1": null
+                }]
+            }
+            """
+
+            for q in section.questions:
+                if q.type == 'multiquestion' and q.get('dynamic_field'):  # this is quite bad
+                    d = {}
+                    for multiquestion_key in [
+                        nested_question.id for nested_question in q.questions
+                        if nested_question.id in response_data.keys()
+                    ]:
+                        # multiquestion keys look like `yesno-0`. We can use the number at the end as an index value
+                        index = int(multiquestion_key.split('-')[1])
+                        multiquestion_item = {multiquestion_key: response_data.pop(multiquestion_key)}
+                        # create a new entry if none exists, else update the existing one
+                        # TODO default dict
+                        if not d.get(index):
+                            d[index] = multiquestion_item
+                        else:
+                            d[index].update(multiquestion_item)
+
+                    # this creates a list with the right amount of entries
+                    response_data[q.id] = [None] * len(brief.get(q.get('dynamic_field').split('.')[1]))
+                    for key in d.keys():
+                        response_data[q.id][key] = d.pop(key)
+
+        import json
+        print('------------>')
+        print(type(response_data))
+        print(json.dumps(response_data, indent=2))
+        print('-')
+
+        process_response_data(section, response_data, fake_brief)
+
+        print(type(response_data))
+        print(json.dumps(response_data, indent=2))
+        print('<------------')
+
+        try:
+            brief_response = data_api_client.create_brief_response(
+                brief_id, current_user.supplier_id, response_data, current_user.email_address
+            )['briefResponses']
+
+        except HTTPError as e:
+            section.name = "Apply for ‘{}’".format(brief['title'])
+
+            section_summary = section.summary(response_data)
+
+            print('---> VALIDATION ERRORS <---')
+            print(json.dumps(e.message, indent=2))
+            # this is interesting: the error messages get filtered out because our multiquestion key isn't actually
+            # a key in the returned form data
+            errors = section_summary.get_error_messages(e.message)
+            print('> <')
+            print(json.dumps(errors, indent=2))
+            print('---> <---')
+
+    return render_template(
+        "briefs/brief_response.html",
+        brief=brief,
+        service_data=response_data,
+        section=section,
+        errors=errors,
+        **dict(main.config['BASE_TEMPLATE_DATA'])
+    ), 200
+
+
 # Add a create route
 @main.route('/opportunities/<int:brief_id>/responses/create', methods=['POST'])
 @login_required

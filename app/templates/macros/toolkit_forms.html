@@ -220,9 +220,11 @@
     </legend>
 
     <span class="question-heading{% if question_content.hint %}-with-hint{% endif %}">
+      {% if question_number %}
         <span class="question-number">
           {{ question_number }}
         </span>
+      {% endif %}
         {{ question_content.question }}
     </span>
 
@@ -238,9 +240,22 @@
 
     {% for child_question in question_content.questions %}
       {% if errors and errors[child_question.id] %}
-        {{ text(child_question, service_data, errors) }}
+        {# :'( #}
+        {% if child_question.type == 'boolean' %}
+          {{ boolean(child_question, service_data, errors) }}
+        {% elif child_question.type == 'textbox_large' %}
+          {{ textbox_large(child_question, service_data, errors) }}
+        {% elif child_question.type == 'text' %}
+          {{ text(child_question, service_data, errors) }}
+        {% endif %}
       {% else %}
-        {{ text(child_question, service_data, {}) }}
+        {% if child_question.type == 'boolean' %}
+          {{ boolean(child_question, service_data, {}) }}
+        {% elif child_question.type == 'textbox_large' %}
+          {{ textbox_large(child_question, service_data, {}) }}
+        {% elif child_question.type == 'text' %}
+          {{ text(child_question, service_data, {}) }}
+        {% endif %}
       {% endif %}
     {% endfor %}
   </fieldset>
