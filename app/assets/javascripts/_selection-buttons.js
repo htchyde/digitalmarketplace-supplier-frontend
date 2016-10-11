@@ -1,3 +1,4 @@
+;// assumes show-hide-content.js is inserted above (which has no trailing semi-colon)
 (function(GOVUK, GDM) {
 
   GDM.selectionButtons = function() {
@@ -8,6 +9,8 @@
       'focusedClass' : 'selection-button-focused',
       'selectedClass' : 'selection-button-selected'
     });
+
+    new GOVUK.ShowHideContent().init();
 
   };
 

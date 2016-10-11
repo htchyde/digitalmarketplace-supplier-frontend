@@ -101,6 +101,7 @@
     value=service_data[question_content.id],
     id=question_content.id,
     type='boolean',
+    followup=question_content.followup,
     error=errors.get(question_content.id)['message']|question_references(get_question),
     question_number=question_number
   %}
