@@ -90,7 +90,10 @@ def brief_response(brief_id):
     framework, lot = get_framework_and_lot(
         data_api_client, brief['frameworkSlug'], brief['lotSlug'], allowed_statuses=['live'])
 
-    content = content_loader.get_manifest(framework['slug'], 'edit_brief_response').filter({'lot': lot['slug']})
+    content = content_loader.get_manifest(
+        framework['slug'], 'edit_brief_response_multiquestion').filter(
+        {'lot': lot['slug'], 'brief': brief}
+    )
     section = content.get_section(content.get_next_editable_section_id())
 
     # replace generic 'Apply for opportunity' title with title including the name of the brief
@@ -122,6 +125,7 @@ def brief_response_multiquestion(brief_id):
     framework, lot = get_framework_and_lot(
         data_api_client, brief['frameworkSlug'], brief['lotSlug'], allowed_statuses=['live'])
 
+    # it's happening here
     content = content_loader.get_manifest(
         framework['slug'], 'edit_brief_response_multiquestion'
     ).filter({'lot': lot['slug']})
@@ -145,12 +149,16 @@ def brief_response_multiquestion(brief_id):
         # if we have a 'dynamic' multiquestion
         if q.type == 'multiquestion' and q.get('dynamic_field'):  # this is quite bad
             new_list_of_questions = []
-            # really hacky way to dynamically figure out how to pass stuff into the section
+            # we have to figure out where the list of questions are
+            # or maybe not, maybe we just pass a list to a dynamic multiquestion and it knows what to do
             where_to_find_our_list_values = q.get('dynamic_field').split('.')
             for index, req in enumerate(locals()[where_to_find_our_list_values[0]][where_to_find_our_list_values[1]]):
 
+                # the nested questions don't get overwritten until the list is looped trhough
+                # means it needs to be a section-level decision
                 for nested_q in q.questions:
                     new_question_data = nested_q._data.copy()
+                    # update the fields that need updating: this is automatic
                     new_question_data.update({'id': "{}-{}".format(nested_q.id, index)})
                     if 'followup' in new_question_data:
                         new_question_data.update({'followup': "{}-{}".format(nested_q.followup, index)})
@@ -159,6 +167,7 @@ def brief_response_multiquestion(brief_id):
                     # hardcoded question attributes to be (potentially) overridden
                     for attr in ['question', 'hint']:
                         try:
+                            # hardcoding 'essentialRequirement' is cheating
                             setattr(
                                 new_question,
                                 attr,
@@ -290,11 +299,22 @@ def create_brief_response(brief_id):
     framework, lot = get_framework_and_lot(
         data_api_client, brief['frameworkSlug'], brief['lotSlug'], allowed_statuses=['live'])
 
-    content = content_loader.get_manifest(framework['slug'], 'edit_brief_response').filter({'lot': lot['slug']})
+    content = content_loader.get_manifest(
+        framework['slug'], 'edit_brief_response_multiquestion').filter(
+        {'lot': lot['slug'], 'brief': brief}
+    )
     section = content.get_section(content.get_next_editable_section_id())
     response_data = section.get_data(request.form)
+    import json
 
     try:
+        print('-------------->')
+        print(request.form)
+        print('-')
+        print(json.dumps(response_data, indent=2))
+        print('-')
+        print(section.get_field_names())
+        print('<-')
         brief_response = data_api_client.create_brief_response(
             brief_id,
             current_user.supplier_id,
@@ -305,6 +325,8 @@ def create_brief_response(brief_id):
         data_api_client.submit_brief_response(brief_response['id'], current_user.email_address)
 
     except HTTPError as e:
+        print('xxxxxxxxxxxxxx')
+        print(json.dumps(e.message, indent=2))
         # replace generic 'Apply for opportunity' title with title including the name of the brief
         section.name = "Apply for ‘{}’".format(brief['title'])
         section.inject_brief_questions_into_boolean_list_question(brief)
