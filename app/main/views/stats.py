@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import render_template, request
 
 from dmapiclient.audit import AuditTypes
+from dmutils.config import convert_to_boolean
 from dmutils.formats import DATETIME_FORMAT
 
 from ..helpers.sum_counts import format_snapshots
@@ -31,7 +32,7 @@ def view_statistics(framework_slug):
     return render_template(
         "view_statistics.html",
         framework=framework,
-        big_screen_mode=(request.args.get('big_screen_mode') == 'yes'),
+        big_screen_mode=convert_to_boolean(request.args.get('big_screen_mode', default="true")),
         services_by_status=format_snapshots(snapshots, 'services', {
             'draft': {
                 'status': 'not-submitted',
