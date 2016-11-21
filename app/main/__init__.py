@@ -38,5 +38,5 @@ def add_cache_control(response):
     return response
 
 
-from .views import services, suppliers, login, frameworks, users, briefs
+from .views import services, suppliers, login, frameworks, users, briefs, stats
 from . import errors
