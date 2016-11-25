@@ -13,6 +13,7 @@ from dmutils.email import send_email, MandrillException
 from dmcontent.formats import format_service_price
 from dmutils.formats import datetimeformat
 from dmutils import s3
+from boto.exception import NoAuthHandlerFound
 from dmutils.documents import (
     RESULT_LETTER_FILENAME, AGREEMENT_FILENAME, SIGNED_AGREEMENT_PREFIX, SIGNED_SIGNATURE_PAGE_PREFIX,
     SIGNATURE_PAGE_FILENAME, get_document_path, generate_timestamped_document_upload_path,
@@ -98,8 +99,12 @@ def framework_dashboard(framework_slug):
             supplier_framework_info['agreementPath']
         )
 
-    key_list = s3.S3(current_app.config['DM_COMMUNICATIONS_BUCKET']).list(framework_slug, load_timestamps=True)
-    key_list.reverse()
+    try:
+        key_list = s3.S3(current_app.config['DM_COMMUNICATIONS_BUCKET']).list(framework_slug, load_timestamps=True)
+        key_list.reverse()
+    except NoAuthHandlerFound:
+        current_app.logger.exception('S3 inaccessible')
+        key_list = []
 
     base_communications_files = {
         "invitation": {
