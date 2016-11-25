@@ -228,8 +228,10 @@ class DOSValidator(DeclarationValidator):
 class G8Validator(DOSValidator):
     number_string_fields = [('dunsNumber', 9)]
 
+
 class G9Validator(G8Validator):
     pass
+
 
 class DOS2Validator(G8Validator):
     pass
