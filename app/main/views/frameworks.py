@@ -2,7 +2,7 @@
 from itertools import chain
 
 from dateutil.parser import parse as date_parse
-from flask import render_template, request, abort, flash, redirect, url_for, current_app, session
+from flask import render_template, request, abort, flash, redirect, url_for, current_app, session, Markup
 from flask_login import current_user
 import flask_featureflags as feature
 import six
@@ -192,7 +192,7 @@ def framework_submission_lots(framework_slug):
     }
     lots = [{
         "title": lot_question[lot['slug']]['label'] if framework["status"] == "open" else lot["name"],
-        'body': lot_question[lot['slug']]['description'],
+        'body': Markup(lot_question[lot['slug']]['description']),
         "link": url_for('.framework_submission_services', framework_slug=framework_slug, lot_slug=lot['slug']),
         "statuses": get_statuses_for_lot(
             lot['oneServiceLimit'],
