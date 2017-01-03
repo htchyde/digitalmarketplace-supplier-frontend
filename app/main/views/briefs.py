@@ -145,10 +145,19 @@ def create_brief_response(brief_id):
         data_api_client.submit_brief_response(brief_response['id'], current_user.email_address)
 
     except HTTPError as e:
+        import json
+
+        print(json.dumps(request.form,  indent=2))
+        print('-->')
+        print(json.dumps(response_data,  indent=2))
+
         # replace generic 'Apply for opportunity' title with title including the name of the brief
         section.name = "Apply for ‘{}’".format(brief['title'])
         section.inject_brief_questions_into_boolean_list_question(brief)
         errors = section.get_error_messages(e.message)
+
+        print('--->')
+        print(json.dumps(errors,  indent=2))
 
         return render_template(
             "briefs/brief_response.html",
